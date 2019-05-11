@@ -4,23 +4,25 @@ import cv2
 import imutils
 import time
 import sys
+from scipy.signal import argrelextrema, argrelmax
 from collections import deque
+import matplotlib.pyplot as plt
 
 import math
 
 #Get these using ball_tracker.py file
-redLower = (21, 94, 0)		#Lower (Hue, Saturation, Value) for red color
-redUpper = (44, 244, 255)	#Upper (HUE, Saturation, Value) for red color
+redLower = (7, 124, 50)		#Lower (Hue, Saturation, Value) for red color
+redUpper = (28, 255, 255)	#Upper (HUE, Saturation, Value) for red color
 
-q = deque([[0,0],[0,0]] * 10)
-
+theta = []
+theta_range = [-1.51 + x*(1.51+1.51)/180 for x in range(180)]
 average = [0,0,0]		#average of center point and radius to get better reading
 depth = 0			    #distance
 
 data = [0, 0]
 
 cap = cv2.VideoCapture(sys.argv[1])
-
+plt.show()
 try:
     while(cap.isOpened()):
 
@@ -48,30 +50,52 @@ try:
 	# find contours in the mask and initialize the current
 	# (x, y) center of the ball
         im, cnts, heir = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        print cnts
+        #print cnts
         #cnts = imutils.grab_contours(cnts)
         #center = None
 
 	# only proceed if at least one contour was found
-	    
+        blank = np.zeros((488,648,1), np.uint8)
+        blank2 = np.zeros((488,648,3), np.uint8)	    
         if len(cnts) > 1:
 		# find the largest contour in the mask, then use
 		# it to compute the minimum enclosing circle and
 		# centroid
 		    
             cnt = sorted(cnts, key=cv2.contourArea, reverse=True)
+
+            #cv2.drawContours(blank, cnts, -1, (0,0,255), 2)
+            #tmp = frame.copy()            
+            cv2.drawContours(blank, [cnt[0], cnt[1]], -1, (255,255,255), 2)
+            #rect = cv2.boundingRect(cnt[0])
+            #rect1 = cv2.boundingRect(cnt[1])
             
-            #cv2.drawContours(frame, cnts, -1, (0,0,255), 2)
-            tmp = frame.copy()            
-            cv2.drawContours(tmp, [cnt[0], cnt[1]], -1, (0,255,0), 2)
-            rect = cv2.boundingRect(cnt[0])
-            rect1 = cv2.boundingRect(cnt[1])
-            cv2.imshow("contour", tmp)
-            x,y,w,h = rect
-            x1,y1,w1,h1 = rect1
+            lines = cv2.HoughLinesP(blank, 1, np.pi/180, 50, 30)
             
-            cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
-            cv2.rectangle(frame,(x1,y1),(x1+w1,y1+h1),(0,255,0),2)
+            if lines is not None:
+                #print lines
+                theta = []
+                for x in range(0, len(lines)):
+                    for x1,y1,x2,y2 in lines[x]:
+                        theta = theta + [math.atan2(y2-y1, x2-x1)]
+                        cv2.line(blank2,(x1,y1),(x2,y2),(0,255,0),2)
+                
+                h,b = np.histogram(theta,bins=theta_range)
+                plt.clf()
+                plt.plot(b[:len(b) - 1],h)
+                
+                plt.draw()
+                plt.pause(0.001)
+                plt.show(block=False)
+                print argrelmax(h, order=5)
+                
+            cv2.imshow("contour", blank2)
+            
+            #x,y,w,h = rect
+            #x1,y1,w1,h1 = rect1
+            
+            #cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+            #cv2.rectangle(frame,(x1,y1),(x1+w1,y1+h1),(0,255,0),2)
             
             #M = cv.moments(cnt[0])
             #M1 = cv.moments(cnt[1])
@@ -91,7 +115,7 @@ try:
 		# only proceed if the radius meets a minimum size
 
 
-	#cv2.imshow("mask", mask)
+	cv2.imshow("mask", blank)
 	cv2.imshow("orig", frame)
 	if cv2.waitKey(50) == ord(' '):
 	    while cv2.waitKey(20) != ord(' '):
